@@ -1,0 +1,30 @@
+{
+  "name": "twilight-indexer-api",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@9.2.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0",
+    "prisma": "^5.10.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

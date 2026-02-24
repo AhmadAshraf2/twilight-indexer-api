@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Core Tables
+// ============================================
+
+model Block {
+  height       Int       @id
+  hash         String    @unique
+  timestamp    DateTime
+  proposer     String?
+  txCount      Int       @default(0)
+  gasUsed      BigInt    @default(0)
+  gasWanted    BigInt    @default(0)
+  chainId      String    @default("nyks")
+  createdAt    DateTime  @default(now())
+
+  transactions Transaction[]
+  events       Event[]
+
+  @@index([timestamp])
+  @@index([proposer])
+}
+
+model Transaction {
+  id           Int       @id @default(autoincrement())
+  hash         String    @unique
+  blockHeight  Int
+  blockTime    DateTime
+  type         String    // Primary message type
+  messageTypes String[]  // All message types in tx
+  messages     Json      // Raw messages array
+  fee          Json?     // Fee object
+  gasUsed      BigInt    @default(0)
+  gasWanted    BigInt    @default(0)
+  memo         String?
+  status       String    @default("success") // success, failed
+  errorLog     String?
+  signers      String[]
+  createdAt    DateTime  @default(now())
+
+  block        Block     @relation(fields: [blockHeight], references: [height])
+  events       Event[]
+
+  @@index([blockHeight])
+  @@index([type])
+  @@index([blockTime])
+  @@index([signers])
+}
+
+model Event {
+  id           Int       @id @default(autoincrement())
+  txHash       String?
+  blockHeight  Int
+  type         String
+  attributes   Json
+  createdAt    DateTime  @default(now())
+
+  block        Block     @relation(fields: [blockHeight], references: [height])
+  transaction  Transaction? @relation(fields: [txHash], references: [hash])
+
+  @@index([type])
+  @@index([blockHeight])
+  @@index([txHash])
+}
+
+model Account {
+  address      String    @id
+  balance      BigInt    @default(0)
+  txCount      Int       @default(0)
+  firstSeen    DateTime  @default(now())
+  lastSeen     DateTime  @default(now())
+  accountType  String?   // validator, oracle, user
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([lastSeen])
+  @@index([accountType])
+}
+
+// ============================================
+// Bridge Module Tables
+// ============================================
+
+model BtcDeposit {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  reserveAddress        String
+  depositAmount         BigInt
+  btcHeight             BigInt
+  btcHash               String
+  twilightDepositAddress String
+  oracleAddress         String
+  votes                 Int       @default(1)
+  confirmed             Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+
+  @@index([twilightDepositAddress])
+  @@index([reserveAddress])
+  @@index([blockHeight])
+  @@unique([btcHash, twilightDepositAddress])
+}
+
+model BtcDepositAddress {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  btcDepositAddress     String    @unique
+  btcSatoshiTestAmount  BigInt
+  twilightStakingAmount BigInt
+  twilightAddress       String
+  createdAt             DateTime  @default(now())
+
+  @@index([twilightAddress])
+}
+
+model BtcWithdrawal {
+  id                    Int       @id @default(autoincrement())
+  withdrawIdentifier    Int       @unique
+  withdrawAddress       String
+  withdrawReserveId     String
+  withdrawAmount        BigInt
+  twilightAddress       String
+  isConfirmed           Boolean   @default(false)
+  blockHeight           Int
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([twilightAddress])
+  @@index([isConfirmed])
+}
+
+model Reserve {
+  id                    BigInt    @id
+  txHash                String
+  blockHeight           Int
+  reserveAddress        String
+  judgeAddress          String
+  btcRelayCapacityValue BigInt    @default(0)
+  totalValue            BigInt    @default(0)
+  privatePoolValue      BigInt    @default(0)
+  publicValue           BigInt    @default(0)
+  feePool               BigInt    @default(0)
+  unlockHeight          BigInt    @default(0)
+  roundId               BigInt    @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([judgeAddress])
+  @@index([reserveAddress])
+}
+
+model SweepProposal {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  reserveId             BigInt
+  newReserveAddress     String
+  judgeAddress          String
+  btcBlockNumber        BigInt
+  btcRelayCapacityValue BigInt
+  btcTxHash             String
+  unlockHeight          BigInt
+  roundId               BigInt
+  oracleAddress         String
+  status                String    @default("proposed") // proposed, signed, broadcast
+  createdAt             DateTime  @default(now())
+
+  @@index([reserveId])
+  @@index([roundId])
+}
+
+model SweepSignature {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  reserveId             BigInt
+  roundId               BigInt
+  signerPublicKey       String
+  sweepSignatures       String[]
+  signerAddress         String
+  createdAt             DateTime  @default(now())
+
+  @@index([reserveId, roundId])
+  @@unique([reserveId, roundId, signerAddress])
+}
+
+model RefundSignature {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  reserveId             BigInt
+  roundId               BigInt
+  signerPublicKey       String
+  refundSignatures      String[]
+  signerAddress         String
+  createdAt             DateTime  @default(now())
+
+  @@index([reserveId, roundId])
+  @@unique([reserveId, roundId, signerAddress])
+}
+
+// ============================================
+// Forks Module Tables
+// ============================================
+
+model DelegateKey {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  validatorAddress      String    @unique
+  btcOracleAddress      String
+  btcPublicKey          String
+  zkOracleAddress       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([btcOracleAddress])
+  @@index([zkOracleAddress])
+}
+
+model BtcChainTip {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  btcHeight             BigInt
+  btcHash               String
+  btcOracleAddress      String
+  createdAt             DateTime  @default(now())
+
+  @@index([btcHeight])
+  @@index([btcOracleAddress])
+  @@unique([btcHeight, btcOracleAddress])
+}
+
+// ============================================
+// Volt Module Tables
+// ============================================
+
+model Fragment {
+  id                    BigInt    @id
+  txHash                String
+  blockHeight           Int
+  judgeAddress          String
+  numOfSigners          Int
+  threshold             Int
+  signerApplicationFee  BigInt
+  fragmentFeeBips       Int
+  arbitraryData         String?
+  validatorAddress      String
+  status                String    @default("bootstrapping") // bootstrapping, active, inactive
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([judgeAddress])
+  @@index([status])
+}
+
+model FragmentSigner {
+  id                    Int       @id @default(autoincrement())
+  fragmentId            BigInt    // Stored without FK to avoid constraint issues
+  txHash                String
+  blockHeight           Int
+  applicationFee        BigInt
+  feeBips               Int
+  btcPubKey             String
+  signerAddress         String
+  status                String    @default("pending") // pending, accepted, rejected
+  createdAt             DateTime  @default(now())
+
+  @@index([fragmentId])
+  @@index([signerAddress])
+  @@unique([fragmentId, signerAddress])
+}
+
+model ClearingAccount {
+  twilightAddress       String    @id
+  btcDepositAddress     String?
+  btcWithdrawAddress    String?
+  reserveBalances       Json      @default("{}")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ============================================
+// zkOS Module Tables
+// ============================================
+
+model ZkosTransfer {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  zkTxId                String    @unique
+  txByteCode            String
+  txFee                 BigInt
+  zkOracleAddress       String
+  decodedData           Json?     // Decoded transaction data from zkOS API
+  inputs                Json?     // Parsed inputs
+  outputs               Json?     // Parsed outputs
+  programType           String?   // e.g., "CreateTraderOrder", "SettleTraderOrder", null for Transfer
+  decodeStatus          String    @default("pending") // "pending" | "ok" | "failed"
+  decodeAttempts        Int       @default(0)
+  lastDecodeError       String?
+  createdAt             DateTime  @default(now())
+
+  @@index([blockHeight])
+  @@index([zkOracleAddress])
+  @@index([programType])
+  @@index([txHash])
+  @@index([decodeStatus])
+}
+
+model ZkosMintBurn {
+  id                    Int       @id @default(autoincrement())
+  txHash                String
+  blockHeight           Int
+  mintOrBurn            Boolean   // true = mint, false = burn
+  btcValue              BigInt
+  qqAccount             String    // QuisQuis account (266 char hex)
+  encryptScalar         String    // 64 char hex
+  twilightAddress       String
+  createdAt             DateTime  @default(now())
+
+  @@index([twilightAddress])
+  @@index([mintOrBurn])
+  @@index([blockHeight])
+  @@index([txHash])
+}
+
+// ============================================
+// Indexer State
+// ============================================
+
+model IndexerState {
+  key                   String    @id
+  value                 String
+  updatedAt             DateTime  @updatedAt
+}
