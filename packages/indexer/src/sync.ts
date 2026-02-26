@@ -78,7 +78,16 @@ async function processBlock(height: number): Promise<void> {
           where: { height: height - 1 },
           select: { hash: true },
         });
-        if (prevBlock && prevBlock.hash !== expectedPrevHash) {
+        // Normalize hashes to uppercase hex for comparison
+        // LCD returns base64, DB stores uppercase hex
+        const normalizeHash = (h: string): string => {
+          // If it looks like base64 (contains +, /, = or is not all hex), convert to hex
+          if (/[^0-9a-fA-F]/.test(h)) {
+            return Buffer.from(h, 'base64').toString('hex').toUpperCase();
+          }
+          return h.toUpperCase();
+        };
+        if (prevBlock && normalizeHash(prevBlock.hash) !== normalizeHash(expectedPrevHash)) {
           logger.error(
             { height, expectedPrevHash, actualPrevHash: prevBlock.hash },
             'Block linkage mismatch — possible reorg. Halting indexer.'
